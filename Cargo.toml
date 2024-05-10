@@ -1,0 +1,23 @@
+[package]
+name = "code2prompt"
+description = "A tiny utility that generates a file representing the structure and content of a directory. Made to easily give context to a LLM."
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "=4.5.3", features = ["derive", "unicode", "wrap_help"] }
+clap-verbosity-flag = "2.2.0"
+crossterm = "0.27.0"
+futures = "0.3.30"
+globset = "0.4.14"
+ignore-files = "3.0.1"
+indicatif = "0.17.8"
+lazy_static = "1.4.0"
+log = "0.4.21"
+miette = "7.2.0"
+rstest = "0.19.0"
+tempfile = "3.10.1"
+thiserror = "1.0.60"
+tokio = "1.37.0"
+walkdir = "2.5.0"
+wax = "0.6.0"
