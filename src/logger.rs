@@ -14,11 +14,11 @@ pub struct Logger;
 impl Logger {
     pub fn format_level<'a>(log_level: &LogLevel) -> StyledContent<String> {
         match log_level {
-            LogLevel::Error => "ERROR".to_string().white().on_red().bold(),
-            LogLevel::Warn => "WARN".to_string().on_yellow().bold(),
-            LogLevel::Info => "INFO".to_string().on_green().bold(),
-            LogLevel::Debug => "DEBUG".to_string().white().on_blue().bold(),
-            LogLevel::Trace => "TRACE".to_string().on_magenta().bold(),
+            LogLevel::Error => "😱  ERROR  ".to_string().red().bold(),
+            LogLevel::Warn => "😳  WARN   ".to_string().yellow().bold(),
+            LogLevel::Info => "🤓☝️  INFO ".to_string().green().bold(),
+            LogLevel::Debug => "🧐  DEBUG  ".to_string().blue().bold(),
+            LogLevel::Trace => "🔬  TRACE  ".to_string().magenta().bold(),
         }
     }
     pub fn format_message_title<'a>(
@@ -27,7 +27,7 @@ impl Logger {
     ) -> StyledContent<String> {
         let m = match message_is_some {
             true => format!("{}: ", message_title).bold(),
-            false => format!("{}\n", message_title).bold(),
+            false => format!("{}\r\n", message_title).bold(),
         };
         m
     }
@@ -36,21 +36,21 @@ impl Logger {
     }
     pub fn format_helper_message<'a>(message: &'a str) -> Vec<StyledContent<String>> {
         let t = format!("\nHelper:").cyan();
-        let m = format!("{}\n", message).dim();
+        let m = format!("{}", message).dim();
         vec![t.stylize(), m.stylize()]
     }
     pub fn format_error_message<'a>(err: &'a str) -> Vec<StyledContent<String>> {
         let t = format!("\nOriginal Error:\n").red();
-        let m = format!("{}\n", err).red().dim();
+        let m = format!("{}", err).red().dim();
         vec![t.stylize(), m.stylize()]
     }
     pub fn format_backtrace_message(backtrace: Backtrace) -> Vec<StyledContent<String>> {
-        let t = format!("\nBacktrace:\n").dim();
-        let m = format!("{}\n", backtrace);
+        let t = format!("\nBacktrace:\r\n").dim();
+        let m = format!("{}\r\n", backtrace);
         vec![t.stylize(), m.stylize()]
     }
     pub fn break_line(buffer: &[StyledContent<String>]) -> Vec<StyledContent<String>> {
-        [buffer, ["\n".to_string().stylize()].as_slice()].concat()
+        [buffer, ["\r\n".to_string().stylize()].as_slice()].concat()
     }
     pub fn concat_with_space(
         buffer1: &[StyledContent<String>],

@@ -1,6 +1,8 @@
+use indicatif::{ProgressBar, ProgressStyle};
 use std::io::prelude::*;
 use std::path::Path;
 use std::rc::Rc;
+use std::time::Duration;
 use std::{fs, path::PathBuf};
 
 use globset::{Candidate, Glob, GlobSet, GlobSetBuilder};
@@ -153,6 +155,15 @@ impl<'a> IgnoreFiles<'a> {
         )
         .unwrap();
 
+        let progress = ProgressBar::new_spinner();
+        progress.enable_steady_tick(Duration::from_millis(100));
+        progress.set_style(
+            ProgressStyle::with_template("{spinner:.blue} {msg}")
+                .unwrap()
+                .tick_strings(&["◜", "◠", "◝", "◞", "◡", "◟", "◯"]),
+        );
+        progress.set_message("Collecting ignore files; you can disable this behavior with the `--do-not-consider-ignore-files` flag");
+
         let (ignore_files, errs) = executor.block_on(from_origin(starting_path));
         let ignore_files: Vec<Result<IgnoreFile, Error>> = ignore_files
             .into_iter()
@@ -168,6 +179,27 @@ impl<'a> IgnoreFiles<'a> {
             );
             Logger::log_err(err);
         });
+
+        /*let ignore_files_considered: String =
+        ignore_files.iter().fold(String::default(), |mut acc, f| {
+            if let Ok(f) = f {
+                acc.push_str(
+                    format!("           - {:?}\n", f.applies_in.as_ref().unwrap()).as_ref(),
+                );
+            }
+            acc
+        });*/
+
+        progress.finish_with_message("Finished collecting ignore files; you can disable this behavior with the `--do-not-consider-ignore-files` flag");
+
+        let progress = ProgressBar::new_spinner();
+        progress.enable_steady_tick(Duration::from_millis(100));
+        progress.set_style(
+            ProgressStyle::with_template("{spinner:.blue} {msg}")
+                .unwrap()
+                .tick_strings(&["◜", "◠", "◝", "◞", "◡", "◟", "◯"]),
+        );
+        progress.set_message("Parsing ignore files");
 
         // For each ignore file, if a apply_in is Some convert each pattern to a pattern relative to
         // starting_path. If apply_in is None, this means it's a global ignore file and the patterns
@@ -221,6 +253,8 @@ impl<'a> IgnoreFiles<'a> {
                 });
 
         Logger::log_message(log::Level::Debug, "Finished processing ignore files", None).unwrap();
+
+        progress.finish_with_message("Finished parsing ignore files");
 
         Self {
             starting_path,
@@ -352,9 +386,24 @@ impl<'a> ArgWalker<'a> {
         })
     }
 
-    fn path_into_candidate(&self, path: &'a Path) -> Candidate<'a> {
+    fn path_as_relative(&self, path: &Path) -> PathBuf {
+        let start_with_dotslash = path.starts_with("./");
+        let root_is_dot = self.starting_path == Path::new(".");
+
+        let is_dir = fs::metadata(path).unwrap().is_dir();
+
         let relative_path = path.strip_prefix(self.starting_path).unwrap();
-        Candidate::new(relative_path)
+        let relative_path =
+            if is_dir && start_with_dotslash && root_is_dot && !relative_path.starts_with("/") {
+                Path::new("/").join(relative_path)
+            } else {
+                relative_path.to_path_buf()
+            };
+        relative_path
+    }
+
+    fn path_into_candidate(&self, path: &'a Path) -> Candidate<'a> {
+        Candidate::new(path)
     }
 
     fn filter_entry(&self, entry: &DirEntry) -> ArgWalkerFilterEntryResult {
@@ -366,10 +415,11 @@ impl<'a> ArgWalker<'a> {
         .unwrap();
 
         // Convert the entry path to a relative path
-        let candidate = self.path_into_candidate(entry.path());
+        let relative_path = self.path_as_relative(entry.path());
+        let candidate = self.path_into_candidate(&relative_path);
 
         Logger::log_message(
-            log::Level::Debug,
+            log::Level::Trace,
             "Converted entry path to candidate",
             Some(format!("{:#?}", candidate).as_str()),
         )
@@ -378,7 +428,7 @@ impl<'a> ArgWalker<'a> {
         // Does the entry match any of the exclude patterns?
         if let Some(ref combiner) = self.maybe_exclude_combiner {
             Logger::log_message(
-                log::Level::Debug,
+                log::Level::Trace,
                 "[maybe_exclude_combiner] Exclude combiner is present",
                 None,
             )
@@ -386,7 +436,7 @@ impl<'a> ArgWalker<'a> {
 
             if combiner.is_match_candidate(&candidate) {
                 Logger::log_message(
-                    log::Level::Debug,
+                    log::Level::Trace,
                     "[maybe_exclude_combiner -> match] Entry matches at least one exclude pattern",
                     None,
                 )
@@ -396,7 +446,7 @@ impl<'a> ArgWalker<'a> {
                 // BUT is it a file that matches an include pattern?
                 if metadata.is_file() {
                     Logger::log_message(
-                        log::Level::Debug,
+                        log::Level::Trace,
                         "[maybe_exclude_combiner -> match -> is_file] Entry is a file",
                         None,
                     )
@@ -404,7 +454,7 @@ impl<'a> ArgWalker<'a> {
 
                     if let Some(ref combiner) = self.maybe_include_combiner {
                         Logger::log_message(
-                            log::Level::Debug,
+                            log::Level::Trace,
                             "[maybe_exclude_combiner -> match -> is_file -> maybe_include_combiner] Include combiner is present",
                             None,
                         ).unwrap();
@@ -450,7 +500,7 @@ impl<'a> ArgWalker<'a> {
         // If the execution reaches this point, it means we have no exclude patterns.
         // If we have a include pattern, the entry must match it.
         Logger::log_message(
-            log::Level::Debug,
+            log::Level::Trace,
             "No exclude combiner present",
             Some("Checking for include patterns"),
         )
@@ -458,7 +508,7 @@ impl<'a> ArgWalker<'a> {
 
         if let Some(ref combiner) = self.maybe_include_combiner {
             Logger::log_message(
-                log::Level::Debug,
+                log::Level::Trace,
                 "[maybe_include_combiner] Include combiner is present",
                 None,
             )
@@ -489,6 +539,16 @@ impl<'a> ArgWalker<'a> {
     }
 
     pub fn try_sprint(&self) -> Result<Vec<Result<DirEntry, Error>>, Error> {
+        let progress = ProgressBar::new_spinner();
+        progress.enable_steady_tick(Duration::from_millis(200));
+        progress.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap()
+                .tick_strings(&["◜", "◠", "◝", "◞", "◡", "◟", "◯"]),
+        );
+        progress.set_message("Walking through the directory tree");
+
         let walker = WalkDir::new(self.starting_path)
             .max_depth(self.max_depth as usize)
             .follow_links(self.follow_symlinks);
@@ -508,6 +568,8 @@ impl<'a> ArgWalker<'a> {
                 ArgWalkerFilterEntryResult::DiscardDir => it.skip_current_dir(),
             }
         }
+
+        progress.finish_with_message("Directory tree walked successfully");
 
         Ok(entries)
     }
@@ -616,18 +678,18 @@ mod tests {
         let dir = tempdir().unwrap();
         let dir_path = dir.path();
 
-        fs::create_dir(dir_path.join("dir1")).unwrap();
-        fs::create_dir(dir_path.join("dir1/subdir1")).unwrap();
-        fs::create_dir(dir_path.join("dir1/subdir2")).unwrap();
-        fs::create_dir(dir_path.join("dir2")).unwrap();
-        fs::File::create(dir_path.join("file1.txt")).unwrap();
-        fs::File::create(dir_path.join("dir1/file2.txt")).unwrap();
-        fs::File::create(dir_path.join("dir1/subdir1/file3.txt")).unwrap();
-        fs::File::create(dir_path.join("dir1/subdir2/file4.txt")).unwrap();
-        fs::File::create(dir_path.join("dir2/file5.txt")).unwrap();
+        fs::create_dir(dir_path.join("dir1")).unwrap(); // Should be included
+        fs::create_dir(dir_path.join("dir1/subdir1")).unwrap(); // Should be included
+        fs::create_dir(dir_path.join("dir1/subdir2")).unwrap(); // Should be included
+        fs::create_dir(dir_path.join("dir2")).unwrap(); // Should be included
+        fs::File::create(dir_path.join("file1.txt")).unwrap(); // Should be excluded
+        fs::File::create(dir_path.join("dir1/file2.txt")).unwrap(); // Should be excluded
+        fs::File::create(dir_path.join("dir1/subdir1/file3.txt")).unwrap(); // Should be included
+        fs::File::create(dir_path.join("dir1/subdir2/file4.txt")).unwrap(); // Should be included
+        fs::File::create(dir_path.join("dir2/file5.txt")).unwrap(); // Should be excluded
 
         let exclude_patterns = vec![Glob::new("**/*.txt").unwrap()];
-        let include_patterns = vec![Glob::new("dir1/**/*.txt").unwrap()];
+        let include_patterns = vec![Glob::new("dir1/*/*.txt").unwrap()];
 
         let walker = ArgWalker::try_from(
             dir_path,
@@ -641,7 +703,7 @@ mod tests {
 
         let entries = walker.try_sprint().unwrap();
 
-        assert_eq!(entries.len(), 6);
+        assert_eq!(entries.len(), 7);
         assert!(entries
             .iter()
             .any(|e| e.as_ref().unwrap().path() == dir_path));
@@ -656,10 +718,13 @@ mod tests {
             .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/subdir2")));
         assert!(entries
             .iter()
-            .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/file2.txt")));
+            .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/subdir1/file3.txt")));
         assert!(entries
             .iter()
-            .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/subdir1/file3.txt")));
+            .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/subdir2/file4.txt")));
+        assert!(entries
+            .iter()
+            .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir2")));
     }
 
     #[test]
@@ -733,14 +798,14 @@ mod tests {
             false,
             Some(exclude_patterns),
             Some(include_patterns),
-            Some(1),
+            Some(1), // <-- This means dir1/file2.txt will NOT be included even though it matches the include pattern
             false,
         )
         .unwrap();
 
         let entries = walker.try_sprint().unwrap();
 
-        assert_eq!(entries.len(), 4);
+        assert_eq!(entries.len(), 3);
         assert!(entries
             .iter()
             .any(|e| e.as_ref().unwrap().path() == dir_path));
@@ -750,7 +815,7 @@ mod tests {
         assert!(entries
             .iter()
             .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir2")));
-        assert!(entries
+        assert!(!entries // <--- "!" here
             .iter()
             .any(|e| e.as_ref().unwrap().path() == dir_path.join("dir1/file2.txt")));
     }
