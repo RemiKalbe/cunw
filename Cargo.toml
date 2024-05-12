@@ -1,6 +1,12 @@
 [package]
 name = "code2prompt"
 description = "A tiny utility that generates a file representing the structure and content of a directory. Made to easily give context to a LLM."
+license-file = "LICENSE"
+repository = "https://github.com/RemiKalbe/code2prompt"
+homepage = "https://github.com/RemiKalbe/code2prompt"
+readme = "README.md"
+keywords = ["code", "prompt", "directory", "structure", "context", "llm", "gpt"]
+categories = ["command-line-utilities", "filesystem"]
 version = "0.1.0"
 edition = "2021"
 
