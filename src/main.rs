@@ -1,96 +1,88 @@
-use std::{cell::RefCell, rc::Rc, time::Duration};
-
 use clap::Parser;
-use crossterm::{
-    execute,
-    style::{PrintStyledContent, Stylize},
-};
+use globset::{Glob, GlobSetBuilder};
 use indicatif::ProgressBar;
+use miette::{Context, IntoDiagnostic, Result};
 
 pub mod args;
-pub mod error;
-pub mod file;
+pub mod codebase;
+//pub mod file;
+pub mod gitignore;
 pub mod logger;
-pub mod walk;
+pub mod os;
+//pub mod walk;
 
-fn main() {
+use codebase::CodebaseBuilder;
+use logger::Logger;
+
+/// Git related globs to ignore, I don't see a reason
+/// why we should consider these files but if you want
+/// to include them you can use `--dangerously-allow-dot-git-traversal` flag.
+const GIT_RELATED_IGNORE_PATTERNS: [&str; 6] = [
+    ".git",
+    "./.git",
+    ".git/*",
+    "./.git/*",
+    ".git/**",
+    "./.git/**",
+];
+
+const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
+
+#[nuclei::main]
+async fn main() -> Result<()> {
     // Record the start time of the program
+    // This is used to calculate the total time taken by the program
     let start = std::time::Instant::now();
 
+    // Parse the command line arguments
     let args = args::Args::parse();
-    log::set_max_level(args.verbosity.log_level_filter());
 
-    let ignore_dot_git = globset::Glob::new("/.git").unwrap();
+    // Set the log level based on the verbosity flag
+    env_logger::builder()
+        .format_timestamp(None)
+        .format_level(false)
+        .format_target(false)
+        .format_module_path(false)
+        .format_indent(Some(logger::LEVEL_WIDTH + logger::LOCATION_WIDTH))
+        .filter_module(CRATE_NAME, args.verbosity.log_level_filter())
+        .init();
 
-    let exclude = args
-        .exclude
-        .unwrap_or_default()
-        .into_iter()
-        .chain(if args.dangerously_allow_dot_git_traversal {
-            vec![]
-        } else {
-            vec![ignore_dot_git]
-        })
-        .collect::<Vec<_>>();
-
-    let walker = walk::ArgWalker::try_from(
-        &args.path,
-        !args.do_not_consider_ignore_files,
-        Some(exclude),
-        args.include,
-        args.max_depth,
-        args.follow_symbolic_links,
-    )
-    .unwrap();
-    let session = walker.try_sprint().unwrap();
-    let session = session.into_iter().fold(Vec::new(), |mut acc, dir| {
-        if let Ok(dir) = dir {
-            acc.push(dir);
+    // Build the excluded paths
+    let mut excluded_paths = GlobSetBuilder::new();
+    if let Some(exclude) = args.exclude {
+        for glob in exclude {
+            excluded_paths.add(glob);
         }
-        acc
-    });
-    let paths = session
-        .iter()
-        .map(|dir| dir.path().to_path_buf())
-        .collect::<Vec<_>>();
-    let paths = Rc::new(RefCell::new(paths));
+    }
+    if !args.do_not_consider_ignore_files {
+        for pattern in GIT_RELATED_IGNORE_PATTERNS.iter() {
+            excluded_paths.add(Glob::new(pattern).unwrap());
+        }
+    }
+    let excluded_paths = excluded_paths.build().unwrap();
 
-    let tree_pg = ProgressBar::new(paths.borrow().len() as u64);
-    tree_pg.enable_steady_tick(Duration::from_millis(100));
-    tree_pg.set_style(
-        indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.94} {pos}/{len} {msg}") // 94: 	Orange4	#875f00
-            .unwrap()
-            .tick_strings(&["◜", "◠", "◝", "◞", "◡", "◟", "◯"]),
-    );
-    tree_pg.set_message("Building directory tree...");
+    // Build Codebase
+    let codebase = CodebaseBuilder::new()
+        .excluded_paths(excluded_paths)
+        .consider_gitignores(!args.do_not_consider_ignore_files)
+        .max_depth(args.max_depth.unwrap_or(std::usize::MAX))
+        .follow_symlinks(args.follow_symbolic_links)
+        .build(args.path)?;
 
-    let tree = file::DirectoryTree::from(
-        args.path.clone(),
-        args.path.clone(),
-        args.path.clone(),
-        Some(paths),
-        &tree_pg,
-    );
+    // Create and write to output file
+    let formated_tree = codebase.get_formated_tree();
+    let formated_files_representation = codebase.get_formated_files_representation()?;
+    let mut output_str = String::new();
+    output_str.push_str(&formated_tree);
+    output_str.push_str("\n\n");
+    output_str.push_str(&formated_files_representation);
 
-    tree_pg.finish_with_message("Directory tree built!");
-
-    let files_paths = session
-        .iter()
-        .filter(|dir| {
-            let metadata = dir.metadata().unwrap();
-            metadata.is_file()
-        })
-        .map(|dir| dir.path().to_path_buf())
-        .collect::<Vec<_>>();
-
-    let mut file_collector = file::FileCollector::new(args.path.clone());
-    file_collector.collect_files(files_paths).unwrap();
-
-    let output_generator = file::OutputGenerator::new(file_collector.files, tree);
-    output_generator
-        .write_file(&args.output.unwrap_or(std::path::PathBuf::from("output.md")))
-        .unwrap();
+    let output = args
+        .output
+        .unwrap_or(std::path::PathBuf::from("output.txt"));
+    std::fs::write(output, output_str)
+        .into_diagnostic()
+        .wrap_err("Failed to write to output file 🫥")?;
 
     // Record the end time of the program
     let end = std::time::Instant::now();
@@ -98,9 +90,7 @@ fn main() {
     let time_taken = end - start;
     let time_taken = time_taken.as_secs_f64();
     // Print the time taken by the program
-    execute!(
-        std::io::stdout(),
-        PrintStyledContent(format!("Done in: {:.4} seconds\r\n", time_taken).dim())
-    )
-    .unwrap();
+    Logger::info(format!("Done in: {:.4} seconds\r\n", time_taken).as_str());
+
+    Ok(())
 }

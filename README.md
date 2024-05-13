@@ -1,9 +1,9 @@
-# Code2Prompt
+# cunw
 
-Code2Prompt is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single Markdown file that represents the structure and content of the codebase.
+cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single Markdown file that represents the structure and content of the codebase.
 
 > [!WARNING]
-> Please note that Code2Prompt is currently in a very early and experimental stage. It has not been extensively tested and may be prone to crashes or unexpected behavior. However, rest assured that any crashes will be limited to the tool itself and will not cause any harm to your system or files.
+> Please note that cunw is currently in a very early and experimental stage. It has not been extensively tested and may be prone to crashes or unexpected behavior. However, rest assured that any crashes will be limited to the tool itself and will not cause any harm to your system or files.
 
 ## 🌟 Features
 
@@ -18,30 +18,30 @@ Code2Prompt is a command-line interface (CLI) tool that generates a structured r
 
 ### Precompiled Binaries
 
-You can easily install Code2Prompt through cargo:
+You can easily install cunw through cargo:
 
 ```bash
-cargo install code2prompt
+cargo install cunw
 ```
 
-Or download the precompiled binaries from the [releases page](https://github.com/RemiKalbe/code2prompt/releases).
+Or download the precompiled binaries from the [releases page](https://github.com/RemiKalbe/cunw/releases).
 
 ### From Source
 
-To install Code2Prompt, ensure you have Rust and Cargo installed on your system. Then, clone the repository and build the project:
+To install cunw, ensure you have Rust and Cargo installed on your system. Then, clone the repository and build the project:
 
 ```bash
-git clone https://github.com/RemiKalbe/code2prompt.git
-cd code2prompt
+git clone https://github.com/RemiKalbe/cunw.git
+cd cunw
 cargo build --release
 ```
 
-The compiled binary will be available at `target/release/code2prompt`.
+The compiled binary will be available at `target/release/cunw`.
 
 ## 🚀 Usage
 
 ```bash
-code2prompt [OPTIONS]
+cunw [OPTIONS]
 ```
 
 ### Options
@@ -61,7 +61,7 @@ code2prompt [OPTIONS]
 To generate a Markdown representation of a codebase located at `path/to/codebase`, excluding files matching `*.txt` and including only files matching `src/**/*.rs`, and save the output to `codebase.md`:
 
 ```bash
-code2prompt -p path/to/codebase -o codebase.md -e "*.txt" -i "src/**/*.rs"
+cunw -p path/to/codebase -o codebase.md -e "*.txt" -i "src/**/*.rs"
 ```
 
 ## 📝 Output Format
@@ -82,7 +82,7 @@ The generated Markdown file will have the following structure:
 
 <file path="Cargo.toml">
 [package]
-name = "code2prompt"
+name = "cunw"
 version = "0.1.0"
 edition = "2021"
 
