@@ -49,8 +49,7 @@ cunw [OPTIONS]
 - `-p, --path <PATH>`: The path to the directory containing the codebase.
 - `-o, --output <FILE>`: The path of the output file. Default: `output.txt`
 - `-e, --exclude <PATTERN>`: Exclude files or directories matching the specified glob pattern.
-- `--do-not-consider-ignore-files`: Do not consider the ignore files (`.gitignore`, `.hgignore`, `.ignore`, `.git/info/exclude`, and `core.excludesFile` in `.git/config`). Default: `false`
-  Note, for now, only `.gitignore` is supported.
+- `--do-not-consider-ignore-files`: Do not consider `.gitignore` files when filtering. Default: `false`
 - `--dangerously-allow-dot-git-traversal`: Include `.git` directory in the search. Default: `false`
 - `-d, --max-depth <DEPTH>`: Maximum depth to walk into the directory tree.
 - `-f, --follow-symbolic-links`: Follow symbolic links. Default: `false`
