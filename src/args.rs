@@ -7,9 +7,9 @@ use globset::Glob;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    #[arg(index = 1, short, long, help = "The path to the directory containing the codebase.", value_hint = ValueHint::DirPath, required = false, default_value = "")]
+    #[arg(index = 1, short, long, help = "The path to the directory containing the codebase.", value_hint = ValueHint::DirPath, required = true)]
     pub path: PathBuf,
-    #[arg(short, long, help = "The path of the output file.", value_hint = ValueHint::FilePath, required = false, default_value = "output.md")]
+    #[arg(short, long, help = "The path of the output file.", value_hint = ValueHint::FilePath, required = false, default_value = "output.txt")]
     pub output: Option<PathBuf>,
     #[arg(short, long, help = "Exclude files or directories matching the specified pattern.", value_hint = ValueHint::Other, required = false, num_args = 0.., action = ArgAction::Append)]
     pub exclude: Option<Vec<Glob>>,

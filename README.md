@@ -9,7 +9,7 @@ cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a s
 
 - Recursively traverses a directory and collects file content
 - Generates a Markdown file representing the codebase structure and content
-- Supports excluding and including files based on glob patterns
+- Supports excluding files based on glob patterns
 - Respects `.gitignore` files by default (can be disabled)
 - Allows specifying the maximum depth of directory traversal
 - Supports following symbolic links (disabled by default)
@@ -46,11 +46,11 @@ cunw [OPTIONS]
 
 ### Options
 
-- `-p, --path <PATH>`: The path to the directory containing the codebase. Default: `.`
-- `-o, --output <FILE>`: The path of the output file. Default: `output.md`
+- `-p, --path <PATH>`: The path to the directory containing the codebase.
+- `-o, --output <FILE>`: The path of the output file. Default: `output.txt`
 - `-e, --exclude <PATTERN>`: Exclude files or directories matching the specified glob pattern.
-- `-i, --include <PATTERN>`: Include only files or directories matching the specified glob pattern.
 - `--do-not-consider-ignore-files`: Do not consider the ignore files (`.gitignore`, `.hgignore`, `.ignore`, `.git/info/exclude`, and `core.excludesFile` in `.git/config`). Default: `false`
+  Note, for now, only `.gitignore` is supported.
 - `--dangerously-allow-dot-git-traversal`: Include `.git` directory in the search. Default: `false`
 - `-d, --max-depth <DEPTH>`: Maximum depth to walk into the directory tree.
 - `-f, --follow-symbolic-links`: Follow symbolic links. Default: `false`
@@ -58,10 +58,10 @@ cunw [OPTIONS]
 
 ### Example
 
-To generate a Markdown representation of a codebase located at `path/to/codebase`, excluding files matching `*.txt` and including only files matching `src/**/*.rs`, and save the output to `codebase.md`:
+To generate a Markdown representation of a codebase located at `path/to/codebase`, excluding files matching `*.txt` and save the output to `codebase.md`:
 
 ```bash
-cunw -p path/to/codebase -o codebase.md -e "*.txt" -i "src/**/*.rs"
+cunw path/to/codebase -o codebase.md -e "*.txt"
 ```
 
 ## 📝 Output Format
