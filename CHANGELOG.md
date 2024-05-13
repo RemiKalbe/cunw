@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2024-05-13
+
+### Fixed
+
+- The `path` property in the generated file is now correctly formatted inside double quotes.
+
 ## [0.2.0] - 2024-05-13
 
 ### Added

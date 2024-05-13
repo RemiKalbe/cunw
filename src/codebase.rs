@@ -466,7 +466,7 @@ impl Codebase {
                 let content = nuclei::block_on(async move { file.content().await })?;
 
                 let formated_content = format!(
-                    "<file path={}>\n{}\n</file>\n",
+                    "<file path=\"{}\">\n{}\n</file>\n",
                     file.path.display(),
                     content
                 );
