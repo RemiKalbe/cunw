@@ -7,7 +7,7 @@ homepage = "https://github.com/RemiKalbe/cunw"
 readme = "README.md"
 keywords = ["code", "prompt", "directory", "context", "llm"]
 categories = ["command-line-utilities", "filesystem"]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
