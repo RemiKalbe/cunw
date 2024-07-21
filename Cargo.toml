@@ -1,7 +1,7 @@
 [package]
 name = "cunw"
 description = "A tiny utility that generates a file representing the structure and content of a directory. Made to easily give context to a LLM."
-license-file = "LICENSE"
+license-file = "MIT"
 repository = "https://github.com/RemiKalbe/cunw"
 homepage = "https://github.com/RemiKalbe/cunw"
 readme = "README.md"

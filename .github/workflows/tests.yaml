@@ -3,8 +3,6 @@ name: Continuous tests
 on:
   push:
     branches: [main]
-    tags:
-      - "v*"
   pull_request:
     branches: [main]
 
@@ -29,7 +27,47 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+  is-unpublished:
+    runs-on: ubuntu-latest
+    name: Is this version unpublished?
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Install toml
+        run: cargo install toml-cli
+      - name: Extract version from Cargo.toml
+        id: extract_version
+        run: |
+          VERSION=$(toml get Cargo.toml package.version | tr -d '"')
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "PACKAGE_VERSION=${VERSION}" >> $GITHUB_ENV
+      - name: Extract crate name from Cargo.toml
+        id: extract_crate_name
+        run: echo "PACKAGE_NAME=$(toml get Cargo.toml package.name | tr -d '"')" >> $GITHUB_ENV
+      - name: Get latest published version
+        id: latest_version
+        run: echo "LATEST_VERSION=$(cargo search ${{ env.PACKAGE_NAME }} --limit 1 | grep -oP '(?<=").*(?=")' | head -1)" >> $GITHUB_ENV
+      - name: Compare versions
+        run: |
+          if [ "$(printf '%s\n' "${{ env.LATEST_VERSION }}" "${{ env.PACKAGE_VERSION }}" | sort -V | tail -n1)" = "${{ env.PACKAGE_VERSION }}" ] && [ "${{ env.PACKAGE_VERSION }}" != "${{ env.LATEST_VERSION }}" ]; then
+            echo "Local version (${{ env.PACKAGE_VERSION }}) is newer than the latest published version (${{ env.LATEST_VERSION }})"
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "Local version (${{ env.PACKAGE_VERSION }}) is not newer than the latest published version (${{ env.LATEST_VERSION }})"
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
   call-publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: [test, is-unpublished]
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.is-unpublished.outputs.should_publish == 'true' &&
+      startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/publish.yaml
+    with:
+      version: ${{ needs.is-unpublished.outputs.version }}
+    secrets: inherit
