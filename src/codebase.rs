@@ -103,7 +103,7 @@ impl CodebaseBuilder {
         // Keep track of the parents of the current branch.
         // This allows us to rewind once we reach a leaf.
         let mut current = &mut tree;
-        let initial_gitignore = Arc::new(GitIgnore::from_dir(current.root.path())?);
+        let initial_gitignore = Arc::new(GitIgnore::from(current.root.path())?);
         // This could be improved, here the Option is used to satisfy the compiler
         // but it is guaranteed to be Some.
         let mut gitignores: Vec<Arc<Option<GitIgnore>>> = Vec::new();
@@ -161,7 +161,7 @@ impl CodebaseBuilder {
                                     Logger::trace("No gitignore found in the current branch");
 
                                     // If no gitignore is found, let's first check if the current entry's parent has a gitignore
-                                    let maybe_gitignore = GitIgnore::from_dir(parent_path)?;
+                                    let maybe_gitignore = GitIgnore::from(parent_path)?;
                                     match maybe_gitignore {
                                         Some(gitignore) => {
                                             Logger::trace(
@@ -482,5 +482,331 @@ impl Codebase {
         let mut buffer = String::new();
         Self::get_formated_leaves_representation(&self.tree, &mut buffer)?;
         Ok(buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use globset::{Glob, GlobSetBuilder};
+    use std::fs::{self, File};
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    fn create_test_directory() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("src")).unwrap();
+        fs::create_dir(dir.path().join("docs")).unwrap();
+
+        File::create(dir.path().join("src/main.rs"))
+            .unwrap()
+            .write_all(b"fn main() {}")
+            .unwrap();
+        File::create(dir.path().join("src/lib.rs"))
+            .unwrap()
+            .write_all(b"pub fn add(a: i32, b: i32) -> i32 { a + b }")
+            .unwrap();
+        File::create(dir.path().join("docs/readme.md"))
+            .unwrap()
+            .write_all(b"# Test Project")
+            .unwrap();
+        File::create(dir.path().join(".gitignore"))
+            .unwrap()
+            .write_all(b"*.log")
+            .unwrap();
+
+        dir
+    }
+
+    #[test]
+    fn test_codebase_builder() {
+        let dir = create_test_directory();
+
+        let codebase = CodebaseBuilder::new()
+            .max_depth(3)
+            .follow_symlinks(false)
+            .build(dir.path().to_path_buf())
+            .unwrap();
+
+        let tree = codebase.get_formated_tree();
+        assert!(tree.contains("src/"));
+        assert!(tree.contains("docs/"));
+        assert!(tree.contains("main.rs"));
+        assert!(tree.contains("lib.rs"));
+        assert!(tree.contains("readme.md"));
+        assert!(tree.contains(".gitignore"));
+    }
+
+    #[test]
+    fn test_codebase_file_content() {
+        let dir = create_test_directory();
+
+        let codebase = CodebaseBuilder::new()
+            .build(dir.path().to_path_buf())
+            .unwrap();
+        let files = codebase.get_formated_files_representation().unwrap();
+
+        assert!(files.contains("fn main() {}"));
+        assert!(files.contains("pub fn add(a: i32, b: i32) -> i32 { a + b }"));
+        assert!(files.contains("# Test Project"));
+        assert!(files.contains("*.log"));
+    }
+
+    #[test]
+    fn test_codebase_exclude_patterns() {
+        let dir = create_test_directory();
+        File::create(dir.path().join("excluded.txt"))
+            .unwrap()
+            .write_all(b"This should be excluded")
+            .unwrap();
+
+        let mut builder = GlobSetBuilder::new();
+        builder.add(Glob::new("*.txt").unwrap());
+        let excluded_paths = builder.build().unwrap();
+
+        let codebase = CodebaseBuilder::new()
+            .excluded_paths(excluded_paths)
+            .build(dir.path().to_path_buf())
+            .unwrap();
+
+        let tree = codebase.get_formated_tree();
+        assert!(!tree.contains("excluded.txt"));
+    }
+
+    // More complex tests
+
+    fn create_file(path: &Path, content: &str) {
+        let mut file = File::create(path).unwrap();
+        writeln!(file, "{}", content).unwrap();
+    }
+
+    fn create_nested_structure(root: &Path) {
+        // Root level
+        create_file(&root.join(".gitignore"), "*.log\n!important.log");
+        create_file(&root.join("root.txt"), "root content");
+        create_file(&root.join("root.log"), "root log");
+        create_file(&root.join("important.log"), "important root log");
+
+        // First level: src
+        fs::create_dir(root.join("src")).unwrap();
+        create_file(&root.join("src/.gitignore"), "*.tmp\n!keep.tmp");
+        create_file(&root.join("src/main.rs"), "fn main() {}");
+        create_file(&root.join("src/lib.rs"), "pub fn lib_fn() {}");
+        create_file(&root.join("src/test.tmp"), "temporary file");
+        create_file(&root.join("src/keep.tmp"), "kept temporary file");
+
+        // Second level: src/module
+        fs::create_dir(root.join("src/module")).unwrap();
+        create_file(&root.join("src/module/.gitignore"), "*.rs\n!mod.rs");
+        create_file(&root.join("src/module/mod.rs"), "pub mod submodule;");
+        create_file(
+            &root.join("src/module/submodule.rs"),
+            "pub fn submodule_fn() {}",
+        );
+        create_file(
+            &root.join("src/module/ignored.rs"),
+            "// This should be ignored",
+        );
+
+        // First level: docs
+        fs::create_dir(root.join("docs")).unwrap();
+        create_file(&root.join("docs/readme.md"), "# Project Documentation");
+        create_file(&root.join("docs/config.log"), "documentation log");
+
+        // Debug: Print the actual file structure
+        println!("Actual file structure:");
+        print_dir_structure(root, 0);
+    }
+
+    fn print_dir_structure(dir: &Path, indent: usize) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            println!(
+                "{}{}",
+                "  ".repeat(indent),
+                path.file_name().unwrap().to_string_lossy()
+            );
+            if path.is_dir() {
+                print_dir_structure(&path, indent + 1);
+            }
+        }
+    }
+
+    fn print_tree(tree: &Tree<CodebaseItem>, indent: usize) {
+        println!("{}{}", "  ".repeat(indent), tree.root);
+        for leaf in &tree.leaves {
+            print_tree(leaf, indent + 1);
+        }
+    }
+
+    #[test]
+    fn test_nested_gitignore_structure() {
+        let temp_dir = TempDir::new().unwrap();
+        create_nested_structure(temp_dir.path());
+
+        let codebase = CodebaseBuilder::new()
+            .consider_gitignores(true)
+            .build(temp_dir.path().to_path_buf())
+            .unwrap();
+
+        println!("Codebase structure:");
+        print_tree(&codebase.tree, 0);
+
+        // Root level checks
+        let root_items: Vec<_> = codebase.tree.leaves.iter().collect();
+        assert!(root_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "important.log"));
+        assert!(root_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "root.txt"));
+        assert!(!root_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "root.log"));
+
+        // src directory checks
+        let src_dir = root_items
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "src")
+            .expect("src directory not found");
+        let src_items: Vec<_> = src_dir.leaves.iter().collect();
+        assert!(src_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "main.rs"));
+        assert!(src_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "lib.rs"));
+        assert!(src_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "keep.tmp"));
+        assert!(!src_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "test.tmp"));
+
+        // src/module directory checks
+        let module_dir = src_items
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "module")
+            .expect("module directory not found");
+        let module_items: Vec<_> = module_dir.leaves.iter().collect();
+        assert!(module_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "mod.rs"));
+        assert!(!module_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "submodule.rs"));
+        assert!(!module_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "ignored.rs"));
+
+        // docs directory checks
+        let docs_dir = root_items
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "docs")
+            .expect("docs directory not found");
+        let docs_items: Vec<_> = docs_dir.leaves.iter().collect();
+        assert!(docs_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "readme.md"));
+        assert!(!docs_items
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "config.log"));
+    }
+
+    #[test]
+    fn test_gitignore_override() {
+        let temp_dir = TempDir::new().unwrap();
+        create_nested_structure(temp_dir.path());
+
+        // Override the src/.gitignore to ignore all .rs files
+        create_file(&temp_dir.path().join("src/.gitignore"), "*.rs");
+
+        let codebase = CodebaseBuilder::new()
+            .consider_gitignores(true)
+            .build(temp_dir.path().to_path_buf())
+            .unwrap();
+
+        let src_dir = codebase
+            .tree
+            .leaves
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "src")
+            .unwrap();
+        assert!(!src_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "main.rs"));
+        assert!(!src_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "lib.rs"));
+
+        // The module's .gitignore should still apply
+        let module_dir = src_dir
+            .leaves
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "module")
+            .unwrap();
+        assert!(module_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "mod.rs"));
+    }
+
+    #[test]
+    fn test_gitignore_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        create_nested_structure(temp_dir.path());
+
+        let codebase = CodebaseBuilder::new()
+            .consider_gitignores(false)
+            .build(temp_dir.path().to_path_buf())
+            .unwrap();
+
+        print_tree(&codebase.tree, 0);
+
+        // All files should be included when gitignore is disabled
+        assert!(codebase
+            .tree
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "root.log"));
+
+        let src_dir = codebase
+            .tree
+            .leaves
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "src")
+            .unwrap();
+        assert!(src_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "test.tmp"));
+
+        let module_dir = src_dir
+            .leaves
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "module")
+            .unwrap();
+        assert!(module_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "submodule.rs"));
+        assert!(module_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "ignored.rs"));
+
+        let docs_dir = codebase
+            .tree
+            .leaves
+            .iter()
+            .find(|item| item.root.path().file_name().unwrap() == "docs")
+            .unwrap();
+        assert!(docs_dir
+            .leaves
+            .iter()
+            .any(|item| item.root.path().file_name().unwrap() == "config.log"));
     }
 }

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added unit tests for `args`, `codebase`, and `gitignore` modules.
+
+### Fixed
+
+- Switch from custom `GitIgnore` implementation to the [ignore](https://crates.io/crates/ignore) crate. Fixes [#1](https://github.com/RemiKalbe/cunw/issues/1).
+- `GIT_RELATED_IGNORE_PATTERNS` constant now correctly ignore `.git` directories.
+
+### Changed
+
+- Created a new `Tree` structure replacing `termtree` which was cumbersome to use.
+
 ## [0.2.1] - 2024-05-13
 
 ### Fixed

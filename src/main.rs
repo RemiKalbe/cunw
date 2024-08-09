@@ -5,11 +5,10 @@ use miette::{Context, IntoDiagnostic, Result};
 
 pub mod args;
 pub mod codebase;
-//pub mod file;
 pub mod gitignore;
 pub mod logger;
 pub mod os;
-//pub mod walk;
+pub mod tree;
 
 use codebase::CodebaseBuilder;
 use logger::Logger;
@@ -17,14 +16,7 @@ use logger::Logger;
 /// Git related globs to ignore, I don't see a reason
 /// why we should consider these files but if you want
 /// to include them you can use `--dangerously-allow-dot-git-traversal` flag.
-const GIT_RELATED_IGNORE_PATTERNS: [&str; 6] = [
-    ".git",
-    "./.git",
-    ".git/*",
-    "./.git/*",
-    ".git/**",
-    "./.git/**",
-];
+const GIT_RELATED_IGNORE_PATTERNS: [&str; 2] = ["**/.git", "./**/.git"];
 
 const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 

@@ -1,171 +1,199 @@
 use std::path::{Path, PathBuf};
 
-use globset::{Glob, GlobSet};
+use ignore::{
+    gitignore::{Gitignore, GitignoreBuilder},
+    Match,
+};
 use miette::{IntoDiagnostic, Result, WrapErr};
 
 use crate::logger::Logger;
 
+/// Represents a `.gitignore` file and provides methods to check if paths are excluded.
+///
+/// This struct encapsulates the logic for parsing and applying gitignore rules
+/// using the [`ignore`] crate.
+#[derive(Debug, Clone)]
 pub struct GitIgnore {
     pub path: PathBuf,
-    excluded_paths: GlobSet,
-    // Note that includes take precedence over excludes
-    included_paths: GlobSet,
+    root: PathBuf,
+    gitignore: Gitignore,
 }
 
 impl GitIgnore {
-    /// Constructs a new `GitIgnore` from a given directory.
+    /// Creates a [`GitignoreBuilder`] and determines the root directory for a given path.
     ///
-    /// This function looks for a .gitignore file in the given directory and constructs
-    /// a new `GitIgnore` instance that can be used to check if paths are excluded or not.
+    /// **Arguments**
     ///
-    /// # Arguments
+    /// * `path` - A reference to a [`Path`] that points to either a directory containing
+    ///            a `.gitignore` file or directly to a `.gitignore` file.
     ///
-    /// * `dir` - A `Path` representing the directory to search for a .gitignore file.
+    /// **Returns**
     ///
-    /// # Returns
-    ///
-    /// A new `GitIgnore` instance if a .gitignore file is found in the directory, otherwise `None`.
-    pub fn from_dir(dir: &Path) -> Result<Option<Self>> {
-        Logger::debug(format!("Checking 🕵️‍♂️ for .gitignore file in directory: {:?}", dir).as_str());
-
-        let gitignore_path = dir.join(".gitignore");
-        if gitignore_path.exists() {
-            Ok(Some(Self::from_path(gitignore_path)?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    /// Fix weird behavior with patterns that start with `/` or `.`
-    fn maybe_pattern_to_variants(pattern: &str) -> Vec<String> {
-        let mut variants = Vec::new();
-        if pattern.starts_with("/") {
-            variants.push(format!(".{}", pattern));
-        }
-        if pattern.starts_with(".") {
-            variants.push(format!("./{}", pattern));
-        }
-        variants.push(pattern.to_string());
-        variants
-    }
-
-    /// Constructs a new `GitIgnore` from a given .gitignore file path.
-    ///
-    /// This function reads the .gitignore file specified by the `path` and constructs
-    /// a new `GitIgnore` instance that can be used to check if paths are excluded or not.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - A `PathBuf` representing the path to the .gitignore file.
-    ///
-    /// # Panics
-    ///
-    /// This function panics if the .gitignore file cannot be read or if it fails to
-    /// build the glob sets. Glob patterns that are invalid will be logged as errors
-    /// and skipped.
-    pub fn from_path(path: PathBuf) -> Result<Self> {
-        Logger::debug(format!("Reading 📖 .gitignore file at path: {:?}", path).as_str());
-
-        let file = std::fs::read_to_string(&path).into_diagnostic()
-            .wrap_err(format!(
-                "Failed to read .gitignore at path: {:?} 😢. It may not be a valid UTF-8 file, or I messed up somewhere 🫢.",
-                path
-            ))?;
-
-        let mut excluded_paths = GlobSet::builder();
-        let mut included_paths = GlobSet::builder();
-        for line in file.lines() {
-            Logger::trace(format!("Parsing line in .gitignore: {:?}", line).as_str());
-
-            if line.starts_with("#") {
-                Logger::trace("Skipping line because it is a comment");
-
-                continue;
-            }
-            if line.starts_with("!") {
-                Logger::trace("Starting with !, parsing as included pattern");
-
-                let included_pattern = line.trim_start_matches('!');
-                let variants = Self::maybe_pattern_to_variants(included_pattern);
-                for variant in variants {
-                    let included_glob = Glob::new(&variant).into_diagnostic()
-                        .wrap_err(format!(
-                            "Failed to parse include pattern in .gitignore at {:?} 😢. The pattern {:?} will be ignored 🙅‍♀️.",
-                            path, line
-                        ));
-                    match included_glob {
-                        Ok(g) => {
-                            included_paths.add(g);
-                        }
-                        Err(e) => {
-                            Logger::error(e.to_string().as_str());
-                        }
-                    }
-                }
+    /// A tuple containing the [`GitignoreBuilder`] and the root [`PathBuf`].
+    fn builder_from(path: &Path) -> (GitignoreBuilder, PathBuf) {
+        let (root, gitignore) = {
+            if path.is_dir() {
+                (path, path.join(".gitignore"))
             } else {
-                Logger::trace("Parsing as excluded pattern");
-
-                let variants = Self::maybe_pattern_to_variants(line);
-                for variant in variants {
-                    let excluded_glob = Glob::new(&variant).into_diagnostic()
-                        .wrap_err(format!(
-                            "Failed to parse exclude pattern in .gitignore at {:?} 😢. The pattern {:?} will be ignored 🙅‍♀️.",
-                            path, line
-                        ));
-                    match excluded_glob {
-                        Ok(g) => {
-                            excluded_paths.add(g);
-                        }
-                        Err(e) => {
-                            Logger::error(e.to_string().as_str());
-                        }
-                    }
-                }
+                (
+                    path.parent().unwrap_or_else(|| Path::new("/")),
+                    path.to_path_buf(),
+                )
             }
-        }
-        Logger::trace("Finished parsing .gitignore file");
-
-        Logger::debug("Building glob sets for excluded and included paths");
-
-        let excluded_paths = excluded_paths.build().into_diagnostic().wrap_err(format!(
-            "Failed to build glob set for excluded paths from .gitignore at path: {:?} 😢.",
-            path
-        ))?;
-        let included_paths = included_paths.build().into_diagnostic().wrap_err(format!(
-            "Failed to build glob set for included paths from .gitignore at path: {:?} 😢.",
-            path
-        ))?;
-
-        Logger::debug("Finished building glob sets for excluded and included paths");
-
-        Ok(Self {
-            path,
-            excluded_paths,
-            included_paths,
-        })
+        };
+        let mut builder = GitignoreBuilder::new(root);
+        builder.add(gitignore);
+        (builder, root.to_path_buf())
     }
 
-    /// Determines if a given path is excluded by the .gitignore rules.
+    /// Creates a new [`GitIgnore`] instance from a given path.
     ///
-    /// This method checks if the specified `path` matches any of the exclude patterns
-    /// and does not match any of the include patterns in the .gitignore file.
+    /// This method attempts to create a [`GitIgnore`] instance from either a directory
+    /// containing a `.gitignore` file or from a direct path to a `.gitignore` file.
     ///
-    /// # Arguments
+    /// **Arguments**
     ///
-    /// * `path` - A reference to a `Path` that will be checked against the .gitignore rules.
+    /// * `path` - A reference to a [`Path`] that points to either a directory containing
+    ///            a `.gitignore` file or directly to a `.gitignore` file.
     ///
-    /// # Returns
+    /// **Returns**
     ///
-    /// Returns `true` if the path is excluded by the .gitignore rules, otherwise `false`.
+    /// A [`Result`] containing an [`Option<GitIgnore>`]. Returns [`None`] if no `.gitignore`
+    /// file is found or if the path doesn't exist.
+    pub fn from(path: &Path) -> Result<Option<Self>> {
+        if path.is_dir() {
+            let gitignore_path = path.join(".gitignore");
+            if !gitignore_path.exists() {
+                return Ok(None);
+            }
+        } else if !path.exists() {
+            return Ok(None);
+        }
+
+        let (builder, root) = Self::builder_from(path);
+        let gitignore = builder
+            .build()
+            .into_diagnostic()
+            .wrap_err(format!("Failed to build .gitignore from path: {:?}", path))?;
+
+        Logger::debug(&format!("Created GitIgnore from path: {:?}", path));
+        Logger::debug(&format!("Root directory: {:?}", root));
+
+        Ok(Some(Self {
+            gitignore,
+            path: path.to_path_buf(),
+            root,
+        }))
+    }
+
+    /// Checks if a given path should be excluded based on the gitignore rules.
+    ///
+    /// This method determines whether a path should be ignored according to the
+    /// rules specified in the `.gitignore` file. It handles both absolute and relative
+    /// paths, converting them to be relative to the gitignore root as needed.
+    ///
+    /// **Arguments**
+    ///
+    /// * `path` - A reference to a [`Path`] to check against the gitignore rules.
+    ///
+    /// **Returns**
+    ///
+    /// A boolean indicating whether the path should be excluded (`true`) or not (`false`).
     pub fn is_excluded(&self, path: &Path) -> bool {
-        let t = self.excluded_paths.is_match(path) && !self.included_paths.is_match(path);
-        Logger::trace(
-            format!(
-                "Checked if path {:?} is excluded in this .gitignore: {}",
-                path, t
-            )
-            .as_str(),
-        );
-        t
+        let relative_path = if path.is_absolute() {
+            path.strip_prefix(&self.root).unwrap_or(path)
+        } else {
+            path
+        };
+
+        Logger::debug(&format!(
+            "Checking if path is excluded: {:?}",
+            relative_path
+        ));
+
+        let match_result = self
+            .gitignore
+            .matched_path_or_any_parents(relative_path, false);
+
+        match match_result {
+            Match::None => {
+                Logger::debug("Path is not excluded (no match)");
+                false
+            }
+            Match::Ignore(_) => {
+                Logger::debug("Path is excluded (ignore match)");
+                true
+            }
+            Match::Whitelist(_) => {
+                Logger::debug("Path is not excluded (whitelist match)");
+                false
+            }
+        }
+    }
+}
+
+impl PartialEq for GitIgnore {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    /// Helper function to create a `.gitignore` file with specified content in a temporary directory.
+    ///
+    /// **Arguments**
+    ///
+    /// * `dir` - A reference to a [`TempDir`] where the `.gitignore` file will be created.
+    /// * `content` - A string slice containing the content to be written to the `.gitignore` file.
+    ///
+    /// **Returns**
+    ///
+    /// A [`PathBuf`] pointing to the created `.gitignore` file.
+    fn create_gitignore(dir: &TempDir, content: &str) -> PathBuf {
+        let gitignore_path = dir.path().join(".gitignore");
+        let mut file = File::create(&gitignore_path).unwrap();
+        writeln!(file, "{}", content).unwrap();
+        gitignore_path
+    }
+
+    #[test]
+    fn test_gitignore_from_dir() {
+        let dir = TempDir::new().unwrap();
+        create_gitignore(&dir, "*.txt\n!important.txt");
+
+        let gitignore = GitIgnore::from(dir.path()).unwrap().unwrap();
+        assert!(gitignore.is_excluded(Path::new("file.txt")));
+        assert!(!gitignore.is_excluded(Path::new("important.txt")));
+        assert!(!gitignore.is_excluded(Path::new("file.rs")));
+    }
+
+    #[test]
+    fn test_gitignore_from_path() {
+        let dir = TempDir::new().unwrap();
+        let gitignore_path = create_gitignore(&dir, "*.log\ntemp/\n!temp/keep.txt");
+
+        let gitignore = GitIgnore::from(&gitignore_path).unwrap().unwrap();
+        assert!(gitignore.is_excluded(Path::new("error.log")));
+        assert!(gitignore.is_excluded(Path::new("temp/file.txt")));
+        assert!(!gitignore.is_excluded(Path::new("temp/keep.txt")));
+        assert!(!gitignore.is_excluded(Path::new("src/main.rs")));
+    }
+
+    #[test]
+    fn test_gitignore_patterns() {
+        let dir = TempDir::new().unwrap();
+        let gitignore_path = create_gitignore(&dir, "/root.txt\n/src/*.rs\n!/src/main.rs");
+
+        let gitignore = GitIgnore::from(&gitignore_path).unwrap().unwrap();
+        assert!(gitignore.is_excluded(Path::new("root.txt")));
+        assert!(gitignore.is_excluded(Path::new("src/lib.rs")));
+        assert!(!gitignore.is_excluded(Path::new("src/main.rs")));
+        assert!(!gitignore.is_excluded(Path::new("doc/root.txt")));
     }
 }
