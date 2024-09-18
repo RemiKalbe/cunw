@@ -1,3 +1,4 @@
+#[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 
 use walkdir::DirEntry;
