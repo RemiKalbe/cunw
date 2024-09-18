@@ -5,9 +5,6 @@
 
 cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single file that represents the structure and content of the codebase.
 
-> [!WARNING]
-> Please note that cunw is currently in a very early and experimental stage. It has not been extensively tested and may be prone to crashes or unexpected behavior. However, rest assured that any crashes will be limited to the tool itself and will not cause any harm to your system or files.
-
 ## 🌟 Features
 
 - Recursively traverses a directory and collects file content

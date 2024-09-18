@@ -88,7 +88,7 @@ impl CodebaseBuilder {
                     // The 'dot' prefix on the other hand is used for things that
                     // are not necessarily hidden; like .gitignore, .github, etc.
                     #[cfg(windows)]
-                    if self.skip_hidden_on_windows().unwrap_or(true) {
+                    if self.skip_hidden_on_windows.unwrap_or(true) {
                         if crate::os::is_hidden_dir_entry(&entry)? {
                             Logger::trace("Skipping hidden entry");
                             continue;

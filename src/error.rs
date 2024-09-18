@@ -32,6 +32,10 @@ pub enum CunwErrorKind {
     #[diagnostic(code(cunw::io_error))]
     Io(#[from] std::io::Error),
 
+    #[error("WalkDir error: {0}")]
+    #[diagnostic(code(cunw::walkdir_error))]
+    WalkDir(#[from] walkdir::Error),
+
     #[error("Failed to build codebase: {0}")]
     #[diagnostic(code(cunw::codebase_build_error))]
     CodebaseBuild(String),
