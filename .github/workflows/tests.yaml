@@ -65,7 +65,6 @@ jobs:
   call-publish:
     needs: [test, is-unpublished]
     if: >
-      github.event_name == 'push' &&
       needs.is-unpublished.outputs.should_publish == 'true' &&
       startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/publish.yaml
