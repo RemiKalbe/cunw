@@ -1,4 +1,4 @@
-name: Publish to crate.io
+name: Publish to crate.io and GitHub Release
 
 on:
   workflow_call:
@@ -8,7 +8,27 @@ on:
         type: string
 
 jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build Binary
+        run: cargo build --release
+      - name: Upload Binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: binary-${{ matrix.os }}
+          path: target/release/${{ github.event.repository.name }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+
   publish:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,16 +48,20 @@ jobs:
         run: |
           cargo login ${CARGO_REGISTRY_TOKEN}
           cargo publish
-      - name: Create Git Tag
+      - name: Download Binaries
+        uses: actions/download-artifact@v3
+      - name: Rename Binaries
         run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git tag -a v${{ inputs.version }} -m "Release ${{ inputs.version }}"
-          git push origin v${{ inputs.version }}
+          mv binary-ubuntu-latest/${{ github.event.repository.name }} ${{ github.event.repository.name }}-linux
+          mv binary-windows-latest/${{ github.event.repository.name }}.exe ${{ github.event.repository.name }}-windows.exe
+          mv binary-macos-latest/${{ github.event.repository.name }} ${{ github.event.repository.name }}-macos
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create v${{ inputs.version }} \
             --title "Release ${{ inputs.version }}" \
-            --generate-notes
+            --generate-notes \
+            ${{ github.event.repository.name }}-linux \
+            ${{ github.event.repository.name }}-windows.exe \
+            ${{ github.event.repository.name }}-macos
