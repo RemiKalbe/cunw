@@ -1,6 +1,9 @@
 # cunw
 
-cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single Markdown file that represents the structure and content of the codebase.
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/RemiKalbe/cunw/.github%2Fworkflows%2Ftests.yaml)
+![Crates.io Version](https://img.shields.io/crates/v/cunw)
+
+cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single file that represents the structure and content of the codebase.
 
 > [!WARNING]
 > Please note that cunw is currently in a very early and experimental stage. It has not been extensively tested and may be prone to crashes or unexpected behavior. However, rest assured that any crashes will be limited to the tool itself and will not cause any harm to your system or files.
@@ -8,7 +11,7 @@ cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a s
 ## 🌟 Features
 
 - Recursively traverses a directory and collects file content
-- Generates a Markdown file representing the codebase structure and content
+- Generates a file representing the codebase structure and content
 - Supports excluding files based on glob patterns
 - Respects `.gitignore` files by default (can be disabled)
 - Allows specifying the maximum depth of directory traversal
@@ -57,7 +60,7 @@ cunw [OPTIONS]
 
 ### Example
 
-To generate a Markdown representation of a codebase located at `path/to/codebase`, excluding files matching `*.txt` and save the output to `codebase.md`:
+To generate a file representation of a codebase located at `path/to/codebase`, excluding files matching `*.txt` and save the output to `codebase.md`:
 
 ```bash
 cunw path/to/codebase -o codebase.md -e "*.txt"
@@ -65,9 +68,9 @@ cunw path/to/codebase -o codebase.md -e "*.txt"
 
 ## 📝 Output Format
 
-The generated Markdown file will have the following structure:
+The generated file will have the following structure:
 
-```markdown
+```xml
 <directory_structure>
 .
 └─ .

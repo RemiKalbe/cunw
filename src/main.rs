@@ -1,16 +1,16 @@
 use clap::Parser;
 use globset::{Glob, GlobSetBuilder};
-use indicatif::ProgressBar;
-use miette::{Context, IntoDiagnostic, Result};
 
 pub mod args;
 pub mod codebase;
+pub mod error;
 pub mod gitignore;
 pub mod logger;
 pub mod os;
 pub mod tree;
 
 use codebase::CodebaseBuilder;
+use error::{CunwError, Result};
 use logger::Logger;
 
 /// Git related globs to ignore, I don't see a reason
@@ -18,9 +18,7 @@ use logger::Logger;
 /// to include them you can use `--dangerously-allow-dot-git-traversal` flag.
 const GIT_RELATED_IGNORE_PATTERNS: [&str; 2] = ["**/.git", "./**/.git"];
 
-const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
-
-#[nuclei::main]
+#[tokio::main]
 async fn main() -> Result<()> {
     // Record the start time of the program
     // This is used to calculate the total time taken by the program
@@ -30,19 +28,39 @@ async fn main() -> Result<()> {
     let args = args::Args::parse();
 
     // Set the log level based on the verbosity flag
-    env_logger::builder()
-        .format_timestamp(None)
-        .format_level(false)
-        .format_target(false)
-        .format_module_path(false)
-        .format_indent(Some(logger::LEVEL_WIDTH + logger::LOCATION_WIDTH))
-        .filter_module(CRATE_NAME, args.verbosity.log_level_filter())
-        .init();
+    logger::Logger::init(Some(args.verbosity.log_level_filter()));
 
     // Build the excluded paths
     let mut excluded_paths = GlobSetBuilder::new();
     if let Some(exclude) = args.exclude {
+        // We normalize the path so that the glob pattern
+        // begins with the base path.
+        // We also ensure that we normalize only if needed.
+        let base = args.path.clone();
+        let base = base.to_str().unwrap();
+        let base = {
+            if base.ends_with('/') {
+                base.to_string()
+            } else {
+                format!("{}/", base)
+            }
+        };
         for glob in exclude {
+            let excluded_paths_with_base = {
+                let original_glob = glob.glob();
+                if !original_glob.starts_with(&base) {
+                    if original_glob.starts_with('/') {
+                        let glob = original_glob.strip_prefix('/').unwrap().to_string();
+                        format!("{}{}", base, glob)
+                    } else {
+                        let glob = original_glob.to_string();
+                        format!("{}{}", base, glob)
+                    }
+                } else {
+                    original_glob.to_string()
+                }
+            };
+            let glob = Glob::new(&excluded_paths_with_base).unwrap();
             excluded_paths.add(glob);
         }
     }
@@ -59,22 +77,17 @@ async fn main() -> Result<()> {
         .consider_gitignores(!args.do_not_consider_ignore_files)
         .max_depth(args.max_depth.unwrap_or(std::usize::MAX))
         .follow_symlinks(args.follow_symbolic_links)
-        .build(args.path)?;
+        .build(args.path)
+        .await?;
 
     // Create and write to output file
-    let formated_tree = codebase.get_formated_tree();
-    let formated_files_representation = codebase.get_formated_files_representation()?;
-    let mut output_str = String::new();
-    output_str.push_str(&formated_tree);
-    output_str.push_str("\n\n");
-    output_str.push_str(&formated_files_representation);
+    let output_str = codebase.try_to_string()?;
 
     let output = args
         .output
         .unwrap_or(std::path::PathBuf::from("output.txt"));
-    std::fs::write(output, output_str)
-        .into_diagnostic()
-        .wrap_err("Failed to write to output file 🫥")?;
+    std::fs::write(output.clone(), output_str)
+        .map_err(|err| CunwError::new(err.into()).with_file(output))?;
 
     // Record the end time of the program
     let end = std::time::Instant::now();

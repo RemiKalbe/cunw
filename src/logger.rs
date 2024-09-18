@@ -6,10 +6,27 @@ use terminal_emoji::Emoji;
 
 pub struct Logger;
 
-pub const LOCATION_WIDTH: usize = 35;
+pub const LOCATION_WIDTH: usize = 40;
 pub const LEVEL_WIDTH: usize = 3;
 
+const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
+
 impl Logger {
+    pub fn init(verbosity: Option<log::LevelFilter>) {
+        let mut builder = env_logger::builder();
+        builder
+            .format_timestamp(None)
+            .format_level(false)
+            .format_target(false)
+            .format_module_path(false)
+            .format_indent(Some(LEVEL_WIDTH + LOCATION_WIDTH));
+
+        if let Some(verbosity) = verbosity {
+            builder.filter_module(CRATE_NAME, verbosity);
+        }
+        let _ = builder.try_init();
+    }
+
     fn format_location(l: &Location<'static>) -> ColoredString {
         let file = l.file();
         let line = l.line();

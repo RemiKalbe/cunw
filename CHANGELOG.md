@@ -5,20 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.2] - 2024-09-18
 
 ### Added
 
 - Added unit tests for `args`, `codebase`, and `gitignore` modules.
+- Added unit tests for the `tree` module.
 
 ### Fixed
 
-- Switch from custom `GitIgnore` implementation to the [ignore](https://crates.io/crates/ignore) crate. Fixes [#1](https://github.com/RemiKalbe/cunw/issues/1).
+- Switch from custom `GitIgnore` implementation to the [ignore](https://crates.io/crates/ignore) crate (fix [#1](https://github.com/RemiKalbe/cunw/issues/1)).
 - `GIT_RELATED_IGNORE_PATTERNS` constant now correctly ignore `.git` directories.
 
 ### Changed
 
-- Created a new `Tree` structure replacing `termtree` which was cumbersome to use.
+- Created a new `Tree` structure replacing `termtree` which was cumbersome to use (fix [#1](https://github.com/RemiKalbe/cunw/issues/1)).
+- Refactored the `Codebase` struct to use the new `Tree` structure (fix [#1](https://github.com/RemiKalbe/cunw/issues/1)).
+- Automatically normalize the `exclude` to make it easier to use (fix [#2](https://github.com/RemiKalbe/cunw/issues/2)).
+- Switched from `nuclei` to `tokio` for asynchronous file reading (fix [#4](https://github.com/RemiKalbe/cunw/issues/4)).
 
 ## [0.2.1] - 2024-05-13
 

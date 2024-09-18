@@ -4,9 +4,11 @@ use ignore::{
     gitignore::{Gitignore, GitignoreBuilder},
     Match,
 };
-use miette::{IntoDiagnostic, Result, WrapErr};
 
-use crate::logger::Logger;
+use crate::{
+    error::{CunwError, Result},
+    logger::Logger,
+};
 
 /// Represents a `.gitignore` file and provides methods to check if paths are excluded.
 ///
@@ -73,8 +75,7 @@ impl GitIgnore {
         let (builder, root) = Self::builder_from(path);
         let gitignore = builder
             .build()
-            .into_diagnostic()
-            .wrap_err(format!("Failed to build .gitignore from path: {:?}", path))?;
+            .map_err(|err| CunwError::new(err.into()).with_file(path.to_path_buf()))?;
 
         Logger::debug(&format!("Created GitIgnore from path: {:?}", path));
         Logger::debug(&format!("Root directory: {:?}", root));
