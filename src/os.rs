@@ -15,7 +15,7 @@ const FILE_ATTRIBUTE_HIDDEN: u32 = 0x00000002;
 pub fn is_hidden_dir_entry(file: &DirEntry) -> Result<bool> {
     Ok(file
         .metadata()
-        .map_err(|err| CunwError::new(err.into()).with_file(file.into_path()))?
+        .map_err(|err| CunwError::new(err.into()).with_file(file.clone().into_path()))?
         .file_attributes()
         & FILE_ATTRIBUTE_HIDDEN
         != 0)
