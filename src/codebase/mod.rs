@@ -138,8 +138,13 @@ impl CodebaseBuilder {
                         Logger::trace("No gitignore impacting current branch");
                     }
 
+                    // Edge case: gitignore has ".*" pattern (ignoring all dotfiles)
+                    // and the root directory is '.', do not skip the root directory
+                    let is_entry_root = entry.path() == from;
                     // Is the entry excluded by the gitignore?
-                    if maybe_gitignore.map_or(false, |gitignore| gitignore.is_excluded(&path)) {
+                    if maybe_gitignore.map_or(false, |gitignore| gitignore.is_excluded(&path))
+                        && !is_entry_root
+                    {
                         Logger::debug("Entry is excluded by the gitignore");
 
                         // If it's a directory, skip it entirely
@@ -575,5 +580,31 @@ mod tests {
         assert!(docs_leaves
             .iter()
             .any(|item| item.path.file_name().unwrap() == "config.log"));
+    }
+
+    // Edge cases
+
+    fn create_dot_root_edge_case_structure(root: &Path) {
+        // Root level
+        create_file(&root.join(".gitignore"), ".*");
+        create_file(&root.join("root.txt"), "root content");
+    }
+
+    #[tokio::test]
+    async fn test_dot_root_edge_case() {
+        ensure_logger();
+        let temp_dir = TempDir::new().unwrap();
+        create_dot_root_edge_case_structure(temp_dir.path());
+
+        let codebase = CodebaseBuilder::new()
+            .consider_gitignores(true)
+            .build(temp_dir.path().to_path_buf())
+            .await
+            .unwrap();
+
+        let root_leaves: Vec<_> = codebase.tree.collect_local_leaves();
+        assert!(root_leaves
+            .iter()
+            .any(|item| item.path.file_name().unwrap() == "root.txt"));
     }
 }

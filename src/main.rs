@@ -8,6 +8,7 @@ pub mod gitignore;
 pub mod logger;
 pub mod os;
 pub mod tree;
+pub mod utils;
 
 use codebase::CodebaseBuilder;
 use error::{CunwError, Result};
@@ -17,6 +18,7 @@ use logger::Logger;
 /// why we should consider these files but if you want
 /// to include them you can use `--dangerously-allow-dot-git-traversal` flag.
 const GIT_RELATED_IGNORE_PATTERNS: [&str; 2] = ["**/.git", "./**/.git"];
+const BASE_PATH_EDGE_CASES: [&str; 2] = [".", "./"];
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,34 +35,25 @@ async fn main() -> Result<()> {
     // Build the excluded paths
     let mut excluded_paths = GlobSetBuilder::new();
     if let Some(exclude) = args.exclude {
-        // We normalize the path so that the glob pattern
-        // begins with the base path.
-        // We also ensure that we normalize only if needed.
-        let base = args.path.clone();
-        let base = base.to_str().unwrap();
-        let base = {
-            if base.ends_with('/') {
-                base.to_string()
-            } else {
-                format!("{}/", base)
-            }
-        };
         for glob in exclude {
-            let excluded_paths_with_base = {
+            // Edge case, if the path starts with '.' or './'
+            let excluded_path = {
                 let original_glob = glob.glob();
-                if !original_glob.starts_with(&base) {
-                    if original_glob.starts_with('/') {
-                        let glob = original_glob.strip_prefix('/').unwrap().to_string();
-                        format!("{}{}", base, glob)
+                if let Some(path_prefix) =
+                    utils::start_with_one_of(&args.path.to_str().unwrap(), &BASE_PATH_EDGE_CASES)
+                {
+                    if let Some(glob_prefix) =
+                        utils::start_with_one_of(&original_glob, &BASE_PATH_EDGE_CASES)
+                    {
+                        original_glob.replacen(glob_prefix, path_prefix, 1)
                     } else {
-                        let glob = original_glob.to_string();
-                        format!("{}{}", base, glob)
+                        format!("./{}", original_glob)
                     }
                 } else {
                     original_glob.to_string()
                 }
             };
-            let glob = Glob::new(&excluded_paths_with_base).unwrap();
+            let glob = Glob::new(&excluded_path).unwrap();
             excluded_paths.add(glob);
         }
     }
