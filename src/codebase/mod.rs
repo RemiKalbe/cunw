@@ -16,6 +16,7 @@ pub mod item;
 
 pub struct CodebaseBuilder {
     excluded_paths: Option<GlobSet>,
+    exit_on_non_utf8: Option<bool>,
     consider_gitignores: Option<bool>,
     max_depth: Option<usize>,
     follow_symlinks: Option<bool>,
@@ -26,6 +27,7 @@ impl CodebaseBuilder {
     pub fn new() -> Self {
         Self {
             excluded_paths: None,
+            exit_on_non_utf8: None,
             consider_gitignores: None,
             max_depth: None,
             follow_symlinks: None,
@@ -35,6 +37,11 @@ impl CodebaseBuilder {
 
     pub fn excluded_paths(mut self, excluded_paths: GlobSet) -> Self {
         self.excluded_paths = Some(excluded_paths);
+        self
+    }
+
+    pub fn exit_on_non_utf8(mut self, exit_on_non_utf8: bool) -> Self {
+        self.exit_on_non_utf8 = Some(exit_on_non_utf8);
         self
     }
 
@@ -205,8 +212,17 @@ impl CodebaseBuilder {
 
         // Wait for all files to be read
         let mut any_error = false;
+        let mut non_utf8_errors = Vec::new();
         while let Some(res) = files_handles.next().await {
             if let Err(err) = res.expect("Failed to await file content") {
+                if !self.exit_on_non_utf8.unwrap_or(false) {
+                    if let CunwErrorKind::Io(io_err) = &err.source {
+                        if io_err.kind() == std::io::ErrorKind::InvalidData {
+                            non_utf8_errors.push(err);
+                            continue;
+                        }
+                    }
+                }
                 Logger::warn(format!("Error while reading file: {:#?}", err).as_str());
                 any_error = true;
             }
@@ -215,6 +231,19 @@ impl CodebaseBuilder {
             return Err(CunwError::new(CunwErrorKind::CodebaseBuild(
                 "Failed to read file(s) content(s)".to_string(),
             )));
+        }
+        if !non_utf8_errors.is_empty() {
+            Logger::warn(
+                "Some files were ignored because they were not UTF-8 encoded and could not be read.",
+            );
+            for err in non_utf8_errors {
+                if let Some(file) = err.related_to_file {
+                    Logger::warn(format!("  - {}", file.display()).as_str());
+                }
+            }
+            Logger::warn(
+                "If you want to exit on non-UTF-8 files, use the --exit-on-non-utf8 flag.",
+            );
         }
 
         Ok(Codebase { tree: root_tree })
