@@ -1,7 +1,7 @@
 # cunw
 
-![GitHub Actions Workflow Status](https://github.com/RemiKalbe/cunw/actions)
-![Crates.io Version](https://crates.io/crates/cunw)
+![https://github.com/RemiKalbe/cunw/actions](https://img.shields.io/github/actions/workflow/status/RemiKalbe/cunw/.github%2Fworkflows%2Ftests.yaml)
+![https://crates.io/crates/cunw](https://img.shields.io/crates/v/cunw)
 
 cunw (codebase unwrap) is a command-line interface (CLI) tool that generates a structured representation of a codebase, making it easy to provide context to a large language model (LLM). It recursively traverses a directory, collects file content, and generates a single file that represents the structure and content of the codebase.
 
