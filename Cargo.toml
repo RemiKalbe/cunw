@@ -7,7 +7,7 @@ homepage = "https://github.com/RemiKalbe/cunw"
 readme = "README.md"
 keywords = ["code", "prompt", "directory", "context", "llm"]
 categories = ["command-line-utilities", "filesystem"]
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -26,10 +26,10 @@ termbg = "0.5.0"
 terminal-emoji = "0.4.1"
 thiserror = "1.0.63"
 tokio = { version = "1.40.0", features = [
-  "sync",
-  "fs",
-  "rt",
-  "rt-multi-thread",
-  "macros",
+    "sync",
+    "fs",
+    "rt",
+    "rt-multi-thread",
+    "macros",
 ] }
 walkdir = "2.5.0"

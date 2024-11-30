@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "cunw"
-version = "0.2.3"
+version = "0.3.0"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
