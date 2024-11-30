@@ -15,6 +15,13 @@ pub struct Args {
     pub exclude: Option<Vec<Glob>>,
     #[arg(
         long,
+        help = "Exit on non-UTF-8 content.",
+        required = false,
+        default_value = "false"
+    )]
+    pub exit_on_non_utf8: bool,
+    #[arg(
+        long,
         help = "Do not consider the ignore files (.gitignore, .hgignore, .ignore, .git/info/exclude and core.excludesFile in .git/config).",
         required = false,
         default_value = "false"
@@ -52,6 +59,7 @@ mod tests {
         assert_eq!(args.path.to_str().unwrap(), "/path/to/codebase");
         assert_eq!(args.output, Some(std::path::PathBuf::from("output.txt")));
         assert_eq!(args.exclude, None);
+        assert_eq!(args.exit_on_non_utf8, false);
         assert_eq!(args.do_not_consider_ignore_files, false);
         assert_eq!(args.dangerously_allow_dot_git_traversal, false);
         assert_eq!(args.max_depth, None);
@@ -67,6 +75,7 @@ mod tests {
             "custom_output.md",
             "-e",
             "*.txt",
+            "--exit-on-non-utf8",
             "--do-not-consider-ignore-files",
             "--dangerously-allow-dot-git-traversal",
             "-m",
@@ -80,6 +89,7 @@ mod tests {
             Some(std::path::PathBuf::from("custom_output.md"))
         );
         assert_eq!(args.exclude.unwrap()[0].glob(), "*.txt");
+        assert_eq!(args.exit_on_non_utf8, true);
         assert_eq!(args.do_not_consider_ignore_files, true);
         assert_eq!(args.dangerously_allow_dot_git_traversal, true);
         assert_eq!(args.max_depth, Some(3));
